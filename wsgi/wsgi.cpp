@@ -611,6 +611,18 @@ QString WSGI::chownSocket() const
     Q_D(const WSGI);
     return d->chownSocket;
 }
+
+void WSGI::setLazy(bool enable)
+{
+    Q_D(WSGI);
+    d->lazy = enable;
+}
+
+bool WSGI::lazy() const
+{
+    Q_D(const WSGI);
+    return d->lazy;
+}
 #endif
 
 bool WSGIPrivate::proc()
@@ -676,6 +688,12 @@ void WSGIPrivate::parseCommandLine()
                                      QCoreApplication::translate("main", "chdir to specified directory afterapps loading"),
                                      QCoreApplication::translate("main", "directory"));
     parser.addOption(chdir2);
+
+#ifdef Q_OS_UNIX
+    auto lazyOption = QCommandLineOption(QStringLiteral("lazy"),
+                                         QCoreApplication::translate("main", "set lazy mode (load app in workers instead of master)"));
+    parser.addOption(lazyOption);
+#endif
 
     auto application = QCommandLineOption({ QStringLiteral("application"), QStringLiteral("a") },
                                           QCoreApplication::translate("main", "Application to load"),
@@ -808,6 +826,10 @@ void WSGIPrivate::parseCommandLine()
 #ifdef Q_OS_UNIX
     if (parser.isSet(process)) {
         q->setProcess(parser.value(process));
+    }
+
+    if (parser.isSet(lazyOption)) {
+        q->setLazy(true);
     }
 
     if (parser.isSet(uidOption)) {

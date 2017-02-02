@@ -94,6 +94,9 @@ public:
     int socketSendBuf = -1;
     int socketReceiveBuf = -1;
     int autoReloadCount = 0;
+#ifdef Q_OS_UNIX
+    bool lazy = false;
+#endif
     bool master = false;
     bool autoReload = false;
     bool tcpNodelay = false;
