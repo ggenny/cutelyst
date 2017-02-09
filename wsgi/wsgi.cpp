@@ -76,7 +76,7 @@ WSGI::~WSGI()
 {
     Q_D(WSGI);
 
-    std::cout << "Cutelyst WSGI stopping" << std::endl;
+    std::cout << "Cutelyst WSGI stopping" << QCoreApplication::applicationPid() << std::endl;
     const auto engines = d->engines;
     for (auto engine : engines) {
         if (QThread::currentThread() != engine->thread()) {
@@ -84,12 +84,14 @@ WSGI::~WSGI()
         }
     }
 
+    std::cout << "Cutelyst WSGI waiting for threads to end" << QCoreApplication::applicationPid() << std::endl;
     for (auto engine : engines) {
         if (QThread::currentThread() != engine->thread()) {
             engine->thread()->wait(30 * 1000);
         }
     }
 
+    std::cout << "Cutelyst WSGI deleting engines" << QCoreApplication::applicationPid() << std::endl;
     for (auto engine : engines) {
         if (QThread::currentThread() != engine->thread()) {
             if (engine->thread()->isFinished()) {
@@ -100,6 +102,7 @@ WSGI::~WSGI()
         }
     }
 
+    std::cout << "Cutelyst WSGI quit?" << QCoreApplication::applicationPid() << std::endl;
     delete d->protoHTTP;
     delete d->protoFCGI;
 }
