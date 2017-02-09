@@ -205,7 +205,7 @@ void UnixFork::handleSigChld()
     while ((p = waitpid(-1, &status, WNOHANG)) > 0)
     {
         /* Handle the death of pid p */
-        qCDebug(CUTELYST_WSGI) << "SIGNCHLD worker died" << p << status;
+        qCDebug(CUTELYST_WSGI) << "SIGCHLD worker died" << p << status;
         // SIGTERM is used when CHEAPED (ie post fork failed)
         if (m_childs.removeOne(p) && !m_terminating && status != SIGTERM) {
             createChild();
@@ -285,7 +285,7 @@ void UnixFork::setupSocketPair(bool closeSignalsFD)
         int signal;
         ::read(fd, &signal, sizeof(signal));
 
-//        qDebug() << "Got signal:" << signal << "pid:" << QCoreApplication::applicationPid();
+        qCDebug(CUTELYST_WSGI) << "Got signal:" << signal << "pid:" << QCoreApplication::applicationPid();
         switch (signal) {
         case SIGCHLD:
             handleSigChld();
