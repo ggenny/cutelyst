@@ -35,6 +35,8 @@ public:
 
     virtual void incomingConnection(qintptr handle) override;
 
+    void shutdown();
+
     QString m_serverAddress;
     CWsgiEngine *m_engine;
     WSGI *m_wsgi;
@@ -42,6 +44,7 @@ public:
     std::vector<std::pair<QAbstractSocket::SocketOption, QVariant> > m_socketOptions;
     std::vector<TcpSocket *> m_socks;
     Protocol *m_protocol;
+    int m_processing = 0;
 };
 
 }

@@ -22,8 +22,6 @@
 #include <QLibraryInfo>
 #include <QTranslator>
 
-#include <iostream>
-
 #include "wsgi.h"
 #include "config.h"
 
@@ -50,7 +48,5 @@ int main(int argc, char *argv[])
         return ret;
     }
 
-    ret = app.exec();
-    std::cout << "Cutelyst WSGI quit" << ret << QCoreApplication::applicationPid() << std::endl;
-    return ret;
+    return app.exec();
 }

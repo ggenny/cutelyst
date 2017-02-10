@@ -39,6 +39,8 @@ public:
     void pauseAccepting();
     void resumeAccepting();
 
+    void shutdown();
+
     virtual void incomingConnection(quintptr handle) override;
 
     QString m_serverAddress;
@@ -48,6 +50,7 @@ public:
 
     std::vector<LocalSocket *> m_socks;
     Protocol *m_protocol;
+    int m_processing = 0;
 };
 
 }

@@ -65,6 +65,7 @@ public:
 Q_SIGNALS:
     void initted();
     void started();
+    void shutdown();
 
 protected:
     virtual bool finalizeHeadersWrite(Context *c, quint16 status,  const Headers &headers, void *engineData);
@@ -72,6 +73,8 @@ protected:
     virtual qint64 doWrite(Context *c, const char *data, qint64 len, void *engineData);
 
 private:
+    void serverShutdown();
+
     friend class ProtocolHttp;
     friend class ProtocolFastCGI;
 

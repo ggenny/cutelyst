@@ -76,7 +76,7 @@ WSGI::~WSGI()
 {
     Q_D(WSGI);
 
-    std::cout << "Cutelyst WSGI stopping" << QCoreApplication::applicationPid() << std::endl;
+//    std::cout << "Cutelyst WSGI stopping " << QCoreApplication::applicationPid() << std::endl;
     const auto engines = d->engines;
     for (auto engine : engines) {
         if (QThread::currentThread() != engine->thread()) {
@@ -84,14 +84,14 @@ WSGI::~WSGI()
         }
     }
 
-    std::cout << "Cutelyst WSGI waiting for threads to end" << QCoreApplication::applicationPid() << std::endl;
+//    std::cout << "Cutelyst WSGI waiting for threads to end " << QCoreApplication::applicationPid() << std::endl;
     for (auto engine : engines) {
         if (QThread::currentThread() != engine->thread()) {
             engine->thread()->wait(30 * 1000);
         }
     }
 
-    std::cout << "Cutelyst WSGI deleting engines" << QCoreApplication::applicationPid() << std::endl;
+//    std::cout << "Cutelyst WSGI deleting engines " << QCoreApplication::applicationPid() << std::endl;
     for (auto engine : engines) {
         if (QThread::currentThread() != engine->thread()) {
             if (engine->thread()->isFinished()) {
@@ -102,7 +102,7 @@ WSGI::~WSGI()
         }
     }
 
-    std::cout << "Cutelyst WSGI quit?" << QCoreApplication::applicationPid() << std::endl;
+//    std::cout << "Cutelyst WSGI quit: " << QCoreApplication::applicationPid() << std::endl;
     delete d->protoHTTP;
     delete d->protoFCGI;
 }
@@ -113,12 +113,22 @@ int WSGI::load(Cutelyst::Application *app)
 
     d->parseCommandLine();
 
+    d->unixFork = new UnixFork(this);
+    connect(d->unixFork, &UnixFork::forked, d, &WSGIPrivate::forked);
+    connect(d->unixFork, &UnixFork::shutdown, d, &WSGIPrivate::shutdown);
+    connect(d, &WSGIPrivate::killChildProcess, d->unixFork, &UnixFork::killChild);
+    connect(d, &WSGIPrivate::terminateChildProcess, d->unixFork, &UnixFork::terminateChild);
+
     if (!d->ini.isEmpty()) {
         std::cout << "Loading configuration: " << d->ini.toLatin1().constData() << std::endl;
         if (!d->loadConfig()) {
             qCCritical(CUTELYST_WSGI) << "Failed to load config " << d->ini;
             return 1;
         }
+    }
+
+    if (!qEnvironmentVariableIsSet("CUTELYST_WSGI_IGNORE_MASTER") && !d->master) {
+        std::cout << "*** WARNING: you are running Cutelyst-WSGI without its master process manager ***" << std::endl;
     }
 
     if (d->master) {
@@ -857,8 +867,7 @@ void WSGIPrivate::parseCommandLine()
         q->setApplication(parser.value(application));
     }
 
-    bool masterSet = parser.isSet(master);
-    q->setMaster(masterSet);
+    q->setMaster(parser.isSet(master));
 
     q->setAutoReload(parser.isSet(autoReload));
 
@@ -884,14 +893,14 @@ void WSGIPrivate::parseCommandLine()
         }
     }
 
-    if (!masterSet && parser.isSet(httpSocket)) {
+    if (parser.isSet(httpSocket)) {
         const auto socks = parser.values(httpSocket);
         for (const QString &http : socks) {
             q->setHttpSocket(http);
         }
     }
 
-    if (!masterSet && parser.isSet(fastcgiSocket)) {
+    if (parser.isSet(fastcgiSocket)) {
         const auto socks = parser.values(fastcgiSocket);
         for (const QString &sock : socks) {
             q->setFastcgiSocket(sock);
@@ -966,6 +975,7 @@ int WSGIPrivate::setupApplication(Cutelyst::Application *app)
 #endif
 
     if (!sockets.size()) {
+        qDebug() << httpSockets << fastcgiSockets << QCoreApplication::applicationPid();
         std::cout << "Please specify a socket to listen to" << std::endl;
         return 1;
     }
@@ -1064,11 +1074,7 @@ void WSGIPrivate::engineInitted()
     if (--enginesInitted == 0) {
 #ifdef Q_OS_UNIX
         if (process) {
-            auto uFork = new UnixFork(this);
-            connect(uFork, &UnixFork::forked, this, &WSGIPrivate::forked);
-            connect(this, &WSGIPrivate::killChildProcess, uFork, &UnixFork::killChild);
-            connect(this, &WSGIPrivate::terminateChildProcess, uFork, &UnixFork::terminateChild);
-            uFork->createProcess(process, threads);
+           unixFork->createProcess(process, threads);
         } else {
             Q_EMIT forked();
         }
@@ -1076,6 +1082,24 @@ void WSGIPrivate::engineInitted()
         Q_EMIT forked();
 #endif //Q_OS_UNIX
     }
+}
+#include <unistd.h>
+void WSGIPrivate::engineShutdown()
+{
+    const auto childrenL = children();
+    for (auto child : childrenL) {
+        auto *engine = qobject_cast<CWsgiEngine*>(child);
+        if (engine) {
+            return;
+        }
+    }
+
+//#ifdef Q_OS_UNIX
+//    unixFork->deleteLater();
+//    _exit(0);
+//#else
+    qApp->quit();
+//#endif
 }
 
 void WSGIPrivate::workerStarted()
@@ -1094,8 +1118,11 @@ CWsgiEngine *WSGIPrivate::createEngine(Application *app, int core)
 
     auto engine = new CWsgiEngine(app, core, QVariantMap(), q);
     connect(engine, &CWsgiEngine::initted, this, &WSGIPrivate::engineInitted, Qt::QueuedConnection);
+    connect(engine, &CWsgiEngine::shutdown, this, &WSGIPrivate::engineShutdown, Qt::QueuedConnection);
     connect(engine, &CWsgiEngine::started, this, &WSGIPrivate::workerStarted, Qt::QueuedConnection);
     connect(this, &WSGIPrivate::forked, engine, &CWsgiEngine::postFork, Qt::QueuedConnection);
+    connect(this, &WSGIPrivate::shutdown, engine, &CWsgiEngine::shutdown, Qt::QueuedConnection);
+
     engine->setTcpSockets(sockets);
     engines.push_back(engine);
 

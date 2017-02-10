@@ -90,12 +90,16 @@ void CWsgiEngine::listen()
             if (server->setSocketDescriptor(info.socketDescriptor)) {
                 server->pauseAccepting();
                 connect(this, &CWsgiEngine::started, server, &TcpServer::resumeAccepting);
+                connect(this, &CWsgiEngine::shutdown, server, &TcpServer::shutdown);
+                connect(server, &TcpServer::destroyed, this, &CWsgiEngine::serverShutdown);
             }
         } else {
             auto server = new LocalServer(QStringLiteral("localhost"), info.protocol, m_wsgi, this);
             if (server->setSocketDescriptor(info.socketDescriptor)) {
                 server->pauseAccepting();
                 connect(this, &CWsgiEngine::started, server, &LocalServer::resumeAccepting);
+                connect(this, &CWsgiEngine::shutdown, server, &LocalServer::shutdown);
+                connect(server, &LocalServer::destroyed, this, &CWsgiEngine::serverShutdown);
             }
         }
     }
@@ -143,6 +147,24 @@ qint64 CWsgiEngine::doWrite(Context *c, const char *data, qint64 len, void *engi
     qint64 ret = sock->proto->sendBody(io, sock, data, len);
     //    conn->waitForBytesWritten(200);
     return ret;
+}
+
+void CWsgiEngine::serverShutdown()
+{
+    const auto childrenL = children();
+    for (auto child : childrenL) {
+        QObject *server = qobject_cast<TcpServer*>(child);
+        if (server) {
+            return;
+        }
+
+        server = qobject_cast<LocalServer*>(child);
+        if (server) {
+            return;
+        }
+    }
+
+    deleteLater();
 }
 
 bool CWsgiEngine::init()
