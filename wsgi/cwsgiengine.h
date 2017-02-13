@@ -66,6 +66,7 @@ Q_SIGNALS:
     void initted();
     void started();
     void shutdown();
+    void finished(CWsgiEngine *engine);
 
 protected:
     virtual bool finalizeHeadersWrite(Context *c, quint16 status,  const Headers &headers, void *engineData);
@@ -82,6 +83,7 @@ private:
     QByteArray m_lastDate;
     QElapsedTimer m_lastDateTimer;
     WSGI *m_wsgi;
+    int m_servers = 0;
 };
 
 }

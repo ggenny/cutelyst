@@ -43,6 +43,10 @@ public:
 
     virtual void incomingConnection(quintptr handle) override;
 
+Q_SIGNALS:
+    void stopped();
+
+private:
     QString m_serverAddress;
     CWsgiEngine *m_engine;
     WSGI *m_wsgi;

@@ -60,8 +60,7 @@ WSGI::WSGI(QObject *parent) : QObject(parent),
     std::cout << "Cutelyst WSGI starting" << std::endl;
 
     if (qEnvironmentVariableIsEmpty("QT_MESSAGE_PATTERN")) {
-        qputenv("QT_MESSAGE_PATTERN",
-                "%{category}[%{if-debug}debug%{endif}%{if-info}info%{endif}%{if-warning}warn%{endif}%{if-critical}crit%{endif}%{if-fatal}fatal%{endif}] %{message}");
+        qSetMessagePattern(QStringLiteral("%{pid}-%{threadid}:%{category}[%{type}] %{message}"));
     }
 
 #ifdef Q_OS_LINUX
@@ -76,33 +75,8 @@ WSGI::~WSGI()
 {
     Q_D(WSGI);
 
-//    std::cout << "Cutelyst WSGI stopping " << QCoreApplication::applicationPid() << std::endl;
-    const auto engines = d->engines;
-    for (auto engine : engines) {
-        if (QThread::currentThread() != engine->thread()) {
-            engine->thread()->quit();
-        }
-    }
+    std::cout << "Cutelyst WSGI stopping " << QCoreApplication::applicationPid() << std::endl;
 
-//    std::cout << "Cutelyst WSGI waiting for threads to end " << QCoreApplication::applicationPid() << std::endl;
-    for (auto engine : engines) {
-        if (QThread::currentThread() != engine->thread()) {
-            engine->thread()->wait(30 * 1000);
-        }
-    }
-
-//    std::cout << "Cutelyst WSGI deleting engines " << QCoreApplication::applicationPid() << std::endl;
-    for (auto engine : engines) {
-        if (QThread::currentThread() != engine->thread()) {
-            if (engine->thread()->isFinished()) {
-                delete engine;
-            }
-        } else {
-            delete engine;
-        }
-    }
-
-//    std::cout << "Cutelyst WSGI quit: " << QCoreApplication::applicationPid() << std::endl;
     delete d->protoHTTP;
     delete d->protoFCGI;
 }
@@ -1083,22 +1057,26 @@ void WSGIPrivate::engineInitted()
 #endif //Q_OS_UNIX
     }
 }
-#include <unistd.h>
-void WSGIPrivate::engineShutdown()
+
+void WSGIPrivate::engineShutdown(CWsgiEngine *engine)
 {
-    const auto childrenL = children();
-    for (auto child : childrenL) {
-        auto *engine = qobject_cast<CWsgiEngine*>(child);
-        if (engine) {
-            return;
-        }
+    engines.erase(std::remove(engines.begin(), engines.end(), engine), engines.end());
+
+    const auto engineThread = engine->thread();
+    if (QThread::currentThread() != engineThread) {
+        engineThread->quit();
+        engineThread->wait(30 * 1000);
+    }
+
+    if (engines.empty()) {
+        QTimer::singleShot(0, qApp, &QCoreApplication::quit);
     }
 
 //#ifdef Q_OS_UNIX
 //    unixFork->deleteLater();
 //    _exit(0);
 //#else
-    qApp->quit();
+//    qApp->quit();
 //#endif
 }
 
@@ -1118,7 +1096,7 @@ CWsgiEngine *WSGIPrivate::createEngine(Application *app, int core)
 
     auto engine = new CWsgiEngine(app, core, QVariantMap(), q);
     connect(engine, &CWsgiEngine::initted, this, &WSGIPrivate::engineInitted, Qt::QueuedConnection);
-    connect(engine, &CWsgiEngine::shutdown, this, &WSGIPrivate::engineShutdown, Qt::QueuedConnection);
+    connect(engine, &CWsgiEngine::finished, this, &WSGIPrivate::engineShutdown, Qt::QueuedConnection);
     connect(engine, &CWsgiEngine::started, this, &WSGIPrivate::workerStarted, Qt::QueuedConnection);
     connect(this, &WSGIPrivate::forked, engine, &CWsgiEngine::postFork, Qt::QueuedConnection);
     connect(this, &WSGIPrivate::shutdown, engine, &CWsgiEngine::shutdown, Qt::QueuedConnection);

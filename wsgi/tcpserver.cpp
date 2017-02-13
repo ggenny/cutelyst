@@ -82,7 +82,7 @@ void TcpServer::incomingConnection(qintptr handle)
 
 void TcpServer::shutdown()
 {
-    close();
+    pauseAccepting();
 
     m_processing = 0;
     const auto childrenL = children();
@@ -92,14 +92,14 @@ void TcpServer::shutdown()
             ++m_processing;
             connect(socket, &TcpSocket::finished, [this] () {
                 if (--m_processing == 0) {
-                    deleteLater();
+                    Q_EMIT stopped();
                 }
             });
         }
     }
 
     if (m_processing == 0) {
-        deleteLater();
+        Q_EMIT stopped();
     }
 }
 

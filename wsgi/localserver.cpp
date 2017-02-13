@@ -71,7 +71,7 @@ void LocalServer::resumeAccepting()
 
 void LocalServer::shutdown()
 {
-    close();
+    pauseAccepting();
 
     m_processing = 0;
     const auto childrenL = children();
@@ -81,14 +81,14 @@ void LocalServer::shutdown()
             ++m_processing;
             connect(socket, &LocalSocket::finished, [this] () {
                 if (--m_processing == 0) {
-                    deleteLater();
+                    Q_EMIT stopped();
                 }
             });
         }
     }
 
     if (m_processing == 0) {
-        deleteLater();
+        Q_EMIT stopped();
     }
 }
 

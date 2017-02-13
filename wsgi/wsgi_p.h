@@ -56,7 +56,7 @@ public:
     void restart(const QString &path);
     void restartTerminate();
     void engineInitted();
-    void engineShutdown();
+    void engineShutdown(CWsgiEngine *engine);
     void workerStarted();
 
     CWsgiEngine *createEngine(Cutelyst::Application *app, int core);
